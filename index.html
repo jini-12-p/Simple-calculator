@@ -9,7 +9,7 @@
   <meta name="apple-mobile-web-app-title" content="간편 계산기">
   <link rel="manifest" href="manifest.webmanifest">
   <title>간편 계산기</title>
-  <!-- v3.1 -->
+  <!-- v3.2 -->
   <style>
     :root{--bg:#f4f4f4;--card:#fff;--text:#202124;--muted:#737373;--line:#dedede;--dark:#30343b;--warn:#b42318;--warnbg:#fff1f1}
     *{box-sizing:border-box}
@@ -45,6 +45,7 @@
     .warning{display:none;margin-top:11px;padding:10px 11px;border-radius:10px;background:var(--warnbg);color:var(--warn);font-size:12px;font-weight:750;line-height:1.5}
     .warning.show{display:block}.hidden{display:none!important}
     .note{text-align:center;color:var(--muted);font-size:11px;line-height:1.55;margin:8px 2px}
+    .compare-positive{color:#b42318}.compare-negative{color:#177245}.compare-neutral{color:var(--text)}
   </style>
 </head>
 <body>
@@ -72,6 +73,24 @@
       <div class="state-box"><div class="k">저장 수량</div><div class="v" id="stateQty">0</div></div>
       <div class="state-box"><div class="k">저장 평균값</div><div class="v" id="stateAvg">0</div></div>
       <div class="state-box" style="grid-column:1/-1"><div class="k">현재 증거금 비중</div><div class="v" id="stateRatio">0%</div></div>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="state-head"><strong>기준값</strong><span>종목별로 저장</span></div>
+    <div class="two">
+      <div class="row"><label for="leaderQty">기준 수량</label><input id="leaderQty" type="number" inputmode="decimal" step="any" placeholder="공개 수량"></div>
+      <div class="row"><label for="leaderRatio">기준 비율 (%)</label><input id="leaderRatio" type="number" inputmode="decimal" step="any" placeholder="예: 0.67"></div>
+    </div>
+    <div class="row"><label for="leaderAvg">기준 평균값</label><input id="leaderAvg" type="number" inputmode="decimal" step="any" placeholder="공개 평단"></div>
+    <button class="calc" id="leaderSave" type="button">기준값 저장</button>
+    <div class="state-grid" style="margin-top:10px">
+      <div class="state-box"><div class="k">기준 비율</div><div class="v" id="leaderRatioView">0%</div></div>
+      <div class="state-box"><div class="k">내 목표비율</div><div class="v" id="targetRatioView">0%</div></div>
+      <div class="state-box"><div class="k">내 현재비율</div><div class="v" id="myRatioCompare">0%</div></div>
+      <div class="state-box"><div class="k">목표 대비</div><div class="v" id="ratioGapView">0%p</div></div>
+      <div class="state-box"><div class="k">기준 평균값</div><div class="v" id="leaderAvgView">0</div></div>
+      <div class="state-box"><div class="k">평균값 차이</div><div class="v" id="avgGapView">0</div></div>
     </div>
   </section>
 
@@ -143,7 +162,7 @@
     </div>
   </section>
 
-  <p class="note">0.27%는 0.27로 입력하세요. 결과는 주문 전에 반드시 재확인하세요.</p>
+  <p class="note">0.67%는 0.67로 입력하세요. 기준값은 공개된 수량·비율·평균값을 그대로 저장하세요. 주문 전 결과를 재확인하세요.</p>
 </main>
 <script>
 (() => {
@@ -153,6 +172,7 @@
 
   const settings = JSON.parse(localStorage.getItem("simpleCalcSettingsV3") || "{}");
   const states = JSON.parse(localStorage.getItem("simpleCalcPositionV3") || '{"BTC":{"qty":0,"avg":0},"ETH":{"qty":0,"avg":0}}');
+  const leaderStates = JSON.parse(localStorage.getItem("simpleCalcLeaderV32") || '{"BTC":{"qty":0,"ratio":0,"avg":0},"ETH":{"qty":0,"ratio":0,"avg":0}}');
   if (settings.balance) $("balance").value = settings.balance;
   if (settings.multiplier) $("multiplier").value = settings.multiplier;
   if (settings.leverage) $("leverage").value = settings.leverage;
@@ -163,6 +183,7 @@
   function fmt(x,d=8){ return new Intl.NumberFormat("en-US",{maximumFractionDigits:d}).format(x); }
   function digits(){ return $("asset").value === "BTC" ? 6 : 5; }
   function state(){ return states[$("asset").value] || {qty:0,avg:0}; }
+  function leaderState(){ return leaderStates[$("asset").value] || {qty:0,ratio:0,avg:0}; }
   function updateStateView(){
     const s=state();
     $("stateQty").textContent=fmt(s.qty,digits())+" "+$("asset").value;
@@ -177,6 +198,29 @@
     $("myAverage").value=s.avg || "";
     $("reduceCurrentQty").value=s.qty || "";
     $("reduceCurrentAvg").value=s.avg || "";
+
+    const ls=leaderState();
+    $("leaderQty").value=ls.qty || "";
+    $("leaderRatio").value=ls.ratio || "";
+    $("leaderAvg").value=ls.avg || "";
+    $("leaderRatioView").textContent=fmt(ls.ratio,4)+"%";
+    const target=ls.ratio>0 ? ls.ratio*num("multiplier") : 0;
+    $("targetRatioView").textContent=fmt(target,4)+"%";
+    $("myRatioCompare").textContent=fmt(ratio,4)+"%";
+    const gap=ratio-target;
+    $("ratioGapView").textContent=(gap>0?"+":"")+fmt(gap,4)+"%p";
+    $("ratioGapView").className="v "+(gap>0?"compare-positive":gap<0?"compare-negative":"compare-neutral");
+    $("leaderAvgView").textContent=fmt(ls.avg,8);
+    const avgGap=(s.avg>0 && ls.avg>0)?s.avg-ls.avg:0;
+    $("avgGapView").textContent=(avgGap>0?"+":"")+fmt(avgGap,8);
+    $("avgGapView").className="v "+(avgGap>0?"compare-positive":avgGap<0?"compare-negative":"compare-neutral");
+
+    if(ls.avg>0) $("targetAverage").value=ls.avg;
+    if(ls.ratio>0){
+      $("ratio").value=ls.ratio;
+      $("diffRatio").value=ls.ratio;
+      $("reduceRatio").value=ls.ratio;
+    }
   }
   function saveSettings(){
     localStorage.setItem("simpleCalcSettingsV3",JSON.stringify({
@@ -195,6 +239,17 @@
     updateStateView();
     $("manualSave").textContent="저장됨";
     setTimeout(()=>$("manualSave").textContent="현재값 저장",1100);
+  });
+
+  $("leaderSave").addEventListener("click",()=>{
+    const q=num("leaderQty"), r=num("leaderRatio"), a=num("leaderAvg");
+    if(!(Number.isFinite(q)&&q>=0) || !(Number.isFinite(r)&&r>=0) || !(Number.isFinite(a)&&a>=0)) return alert("기준 수량·비율·평균값을 정확히 입력하세요.");
+    if((q===0 || r===0 || a===0) && !(q===0 && r===0 && a===0)) return alert("기준값은 세 항목을 모두 입력하거나 모두 0으로 입력하세요.");
+    leaderStates[$("asset").value]={qty:q,ratio:r,avg:a};
+    localStorage.setItem("simpleCalcLeaderV32",JSON.stringify(leaderStates));
+    updateStateView();
+    $("leaderSave").textContent="저장됨";
+    setTimeout(()=>$("leaderSave").textContent="기준값 저장",1100);
   });
 
   updateStateView();
@@ -260,7 +315,9 @@
       if(!Number.isFinite(result)||result<0) return alert("현재 가격 위치에서는 목표 평균값에 맞출 수 없습니다.");
       const total=q+result, avg=(q*a+result*p)/total;
       next={qty:total,avg:avg};
-      rows=[["계산 후 전체수량",fmt(total,digits())+" "+asset],["계산 후 평균값",fmt(avg,8)],["추가 전체금액",fmt(result*p,2)+" USDT"],["추가 사용금액",fmt(result*p/num("leverage"),2)+" USDT"]];
+      const afterRatio=total*avg/num("leverage")/num("balance")*100;
+      const ls=leaderState(), targetRatio=ls.ratio*num("multiplier");
+      rows=[["계산 후 전체수량",fmt(total,digits())+" "+asset],["계산 후 평균값",fmt(avg,8)],["계산 후 내 비율",fmt(afterRatio,4)+"%"],["기준 목표비율",fmt(targetRatio,4)+"%"],["목표 초과",fmt(Math.max(0,afterRatio-targetRatio),4)+"%p"],["추가 사용금액",fmt(result*p/num("leverage"),2)+" USDT"]];
       if(result>q) warnings.push("추가수량이 현재 수량보다 큽니다.");
       if(result>q*2) warnings.push("추가수량이 현재 수량의 2배를 넘습니다.");
       showResult("필요한 추가값",result,rows,warnings,next);
