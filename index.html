@@ -9,7 +9,7 @@
   <meta name="apple-mobile-web-app-title" content="간편 계산기">
   <link rel="manifest" href="manifest.webmanifest">
   <title>간편 계산기</title>
-  <!-- v3.2 -->
+  <!-- v3.4 -->
   <style>
     :root{--bg:#f4f4f4;--card:#fff;--text:#202124;--muted:#737373;--line:#dedede;--dark:#30343b;--warn:#b42318;--warnbg:#fff1f1}
     *{box-sizing:border-box}
@@ -46,11 +46,31 @@
     .warning.show{display:block}.hidden{display:none!important}
     .note{text-align:center;color:var(--muted);font-size:11px;line-height:1.55;margin:8px 2px}
     .compare-positive{color:#b42318}.compare-negative{color:#177245}.compare-neutral{color:var(--text)}
+    .scan-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+    .scan-btn{border:1px solid var(--dark);background:#fff;color:var(--dark);border-radius:12px;padding:13px 8px;font-size:14px;font-weight:900}
+    .scan-status{margin-top:10px;padding:10px;border-radius:10px;background:#fafafa;border:1px solid var(--line);font-size:12px;line-height:1.5;color:var(--muted)}
+    .scan-status.busy{color:var(--text);font-weight:800}
+    .scan-status.error{background:var(--warnbg);color:var(--warn);font-weight:800}
+    .scan-preview{width:100%;max-height:180px;object-fit:contain;border-radius:10px;margin-top:10px;display:none;background:#eee}
+    .scan-confirm{display:none;margin-top:8px;width:100%;border:0;border-radius:11px;padding:12px;background:var(--dark);color:#fff;font-weight:900}
   </style>
 </head>
 <body>
 <main class="wrap">
   <h1>간편 계산기</h1>
+
+  <section class="card">
+    <div class="state-head"><strong>캡처 자동입력</strong><span>확인 후 적용</span></div>
+    <div class="scan-grid">
+      <button class="scan-btn" id="leaderScanBtn" type="button">리더 캡처</button>
+      <button class="scan-btn" id="myScanBtn" type="button">내 포지션 캡처</button>
+    </div>
+    <input id="leaderScanFile" type="file" accept="image/*" class="hidden">
+    <input id="myScanFile" type="file" accept="image/*" class="hidden">
+    <img id="scanPreview" class="scan-preview" alt="">
+    <div id="scanStatus" class="scan-status">BTC 또는 ETH를 먼저 선택한 뒤 캡처를 불러오세요. 숫자를 읽은 후 직접 확인해야 적용됩니다.</div>
+    <button id="scanConfirm" class="scan-confirm" type="button">읽은 값 적용</button>
+  </section>
 
   <section class="card">
     <div class="state-head"><strong>현재값</strong><span>이 기기에만 저장</span></div>
@@ -77,75 +97,76 @@
   </section>
 
   <section class="card">
-    <div class="state-head"><strong>기준값</strong><span>종목별로 저장</span></div>
+    <div class="state-head"><strong>리더 현재값</strong><span>종목별로 저장</span></div>
     <div class="two">
-      <div class="row"><label for="leaderQty">기준 수량</label><input id="leaderQty" type="number" inputmode="decimal" step="any" placeholder="공개 수량"></div>
-      <div class="row"><label for="leaderRatio">기준 비율 (%)</label><input id="leaderRatio" type="number" inputmode="decimal" step="any" placeholder="예: 0.67"></div>
+      <div class="row"><label for="leaderQty">리더 수량</label><input id="leaderQty" type="number" inputmode="decimal" step="any" placeholder="공개 수량"></div>
+      <div class="row"><label for="leaderRatio">리더 현재 총비중 (%)</label><input id="leaderRatio" type="number" inputmode="decimal" step="any" placeholder="예: 0.67"></div>
     </div>
-    <div class="row"><label for="leaderAvg">기준 평균값</label><input id="leaderAvg" type="number" inputmode="decimal" step="any" placeholder="공개 평단"></div>
-    <button class="calc" id="leaderSave" type="button">기준값 저장</button>
+    <div class="row"><label for="leaderAvg">리더 평단</label><input id="leaderAvg" type="number" inputmode="decimal" step="any" placeholder="공개 평단"></div>
+    <button class="calc" id="leaderSave" type="button">리더값 저장</button>
     <div class="state-grid" style="margin-top:10px">
-      <div class="state-box"><div class="k">기준 비율</div><div class="v" id="leaderRatioView">0%</div></div>
+      <div class="state-box"><div class="k">리더 비중</div><div class="v" id="leaderRatioView">0%</div></div>
       <div class="state-box"><div class="k">내 목표비율</div><div class="v" id="targetRatioView">0%</div></div>
       <div class="state-box"><div class="k">내 현재비율</div><div class="v" id="myRatioCompare">0%</div></div>
       <div class="state-box"><div class="k">목표 대비</div><div class="v" id="ratioGapView">0%p</div></div>
-      <div class="state-box"><div class="k">기준 평균값</div><div class="v" id="leaderAvgView">0</div></div>
+      <div class="state-box"><div class="k">리더 평단</div><div class="v" id="leaderAvgView">0</div></div>
       <div class="state-box"><div class="k">평균값 차이</div><div class="v" id="avgGapView">0</div></div>
     </div>
   </section>
 
   <div class="tabs">
-    <button class="tab active" data-mode="basic">기본</button>
-    <button class="tab" data-mode="diff">차이</button>
-    <button class="tab" data-mode="average">평균</button>
-    <button class="tab" data-mode="reduce">정리</button>
+    <button class="tab active" data-mode="basic">신규</button>
+    <button class="tab" data-mode="diff">비중추가</button>
+    <button class="tab" data-mode="average">평단추매</button>
+    <button class="tab" data-mode="reduce">비중정리</button>
   </div>
 
   <section class="card">
     <div id="commonFields">
       <div class="two">
-        <div class="row"><label for="multiplier">배율</label><input id="multiplier" type="number" inputmode="decimal" step="any" value="1.3"></div>
-        <div class="row"><label for="leverage">배수값</label><input id="leverage" type="number" inputmode="decimal" step="any" value="50"></div>
+        <div class="row"><label for="multiplier">내 적용배율</label><input id="multiplier" type="number" inputmode="decimal" step="any" value="1.3"></div>
+        <div class="row"><label for="leverage">레버리지</label><input id="leverage" type="number" inputmode="decimal" step="any" value="50"></div>
       </div>
     </div>
 
     <div id="basicFields">
       <div class="two">
-        <div class="row"><label for="ratio">비율 (%)</label><input id="ratio" type="number" inputmode="decimal" step="any" placeholder="예: 0.27"></div>
-        <div class="row"><label for="price">기준값</label><input id="price" type="number" inputmode="decimal" step="any" placeholder="진입가격"></div>
+        <div class="row"><label for="ratio">리더 신규 비중 (%)</label><input id="ratio" type="number" inputmode="decimal" step="any" placeholder="예: 0.27"></div>
+        <div class="row"><label for="price">내 실제 진입가격</label><input id="price" type="number" inputmode="decimal" step="any" placeholder="지금 주문할 가격"></div>
       </div>
     </div>
 
     <div id="diffFields" class="hidden">
       <div class="two">
-        <div class="row"><label for="diffRatio">전체 비율 (%)</label><input id="diffRatio" type="number" inputmode="decimal" step="any" placeholder="예: 1.36"></div>
-        <div class="row"><label for="diffPrice">기준값</label><input id="diffPrice" type="number" inputmode="decimal" step="any" placeholder="추가가격"></div>
+        <div class="row"><label for="diffRatio">리더 현재 총비중 (%)</label><input id="diffRatio" type="number" inputmode="decimal" step="any" placeholder="예: 1.36"></div>
+        <div class="row"><label for="diffPrice">내 실제 추가가격</label><input id="diffPrice" type="number" inputmode="decimal" step="any" placeholder="주문 직전 현재 시장가"></div>
       </div>
-      <div class="row"><label for="diffCurrentQty">현재 수량</label><input id="diffCurrentQty" type="number" inputmode="decimal" step="any"></div>
+      <div class="row"><label for="diffCurrentQty">내 현재 수량</label><input id="diffCurrentQty" type="number" inputmode="decimal" step="any"></div>
     </div>
 
     <div id="averageFields" class="hidden">
-      <div class="row"><label for="avgCurrentQty">현재 수량</label><input id="avgCurrentQty" type="number" inputmode="decimal" step="any"></div>
+      <div class="row"><label for="avgCurrentQty">내 현재 수량 <small>자동</small></label><input id="avgCurrentQty" readonly type="number" inputmode="decimal" step="any"></div>
       <div class="two">
-        <div class="row"><label for="myAverage">현재 평균값</label><input id="myAverage" type="number" inputmode="decimal" step="any" placeholder="내 평단"></div>
-        <div class="row"><label for="targetAverage">목표 평균값</label><input id="targetAverage" type="number" inputmode="decimal" step="any" placeholder="맞출 평단"></div>
+        <div class="row"><label for="myAverage">내 현재 평단 <small>자동</small></label><input id="myAverage" readonly type="number" inputmode="decimal" step="any" placeholder="내 평단"></div>
+        <div class="row"><label for="targetAverage">리더 현재 평단 <small>자동</small></label><input id="targetAverage" readonly type="number" inputmode="decimal" step="any" placeholder="맞출 평단"></div>
       </div>
-      <div class="row"><label for="addPrice">추가 기준값</label><input id="addPrice" type="number" inputmode="decimal" step="any" placeholder="지금 추가할 가격"></div>
+      <div class="row"><label for="addPrice">지금 시장가 <small>이것만 입력</small></label><input id="addPrice" type="number" inputmode="decimal" step="any" placeholder="거래소에 보이는 현재 시장가"></div>
+      <p class="note" style="font-weight:800;color:#b42318">리더 추매가격이 아니라, 내가 실제 주문할 현재 시장가를 입력하세요.</p>
     </div>
 
     <div id="reduceFields" class="hidden">
       <div class="two">
-        <div class="row"><label for="reduceRatio">리더 정리 전 총비율 (%)</label><input id="reduceRatio" type="number" inputmode="decimal" step="any" placeholder="예: 1.00"></div>
-        <div class="row"><label for="reducePercent">리더 정리 비율 (%)</label><input id="reducePercent" type="number" inputmode="decimal" step="any" placeholder="예: 50"></div>
+        <div class="row"><label for="reduceRatio">리더 정리 직전 총비중 (%)</label><input id="reduceRatio" type="number" inputmode="decimal" step="any" placeholder="예: 1.00"></div>
+        <div class="row"><label for="reducePercent">리더가 덜어낸 비율 (%)</label><input id="reducePercent" type="number" inputmode="decimal" step="any" placeholder="예: 50"></div>
       </div>
       <div class="two">
-        <div class="row"><label for="reduceCurrentQty">현재 내 수량</label><input id="reduceCurrentQty" type="number" inputmode="decimal" step="any"></div>
-        <div class="row"><label for="reduceCurrentAvg">현재 내 평균값</label><input id="reduceCurrentAvg" type="number" inputmode="decimal" step="any"></div>
+        <div class="row"><label for="reduceCurrentQty">내 현재 수량</label><input id="reduceCurrentQty" type="number" inputmode="decimal" step="any"></div>
+        <div class="row"><label for="reduceCurrentAvg">내 현재 평단</label><input id="reduceCurrentAvg" type="number" inputmode="decimal" step="any"></div>
       </div>
-      <p class="note">리더 정리 후 비율의 1.3배만 남도록, 평단 맞추기로 늘어난 수량까지 포함해 정리값을 계산합니다.</p>
+      <p class="note">리더 정리 후 비중의 내 적용배율만 남도록, 평단 맞추기로 늘어난 수량까지 포함해 정리값을 계산합니다.</p>
     </div>
 
-    <button class="calc" id="calculate">계산</button>
+    <button class="calc" id="calculate">수량 계산</button>
   </section>
 
   <section class="card result" id="resultCard">
@@ -162,13 +183,15 @@
     </div>
   </section>
 
-  <p class="note">0.67%는 0.67로 입력하세요. 기준값은 공개된 수량·비율·평균값을 그대로 저장하세요. 주문 전 결과를 재확인하세요.</p>
+  <p class="note">0.67%는 0.67로 입력하세요. 평단추매는 현재 시장가만 입력합니다. 주문 전 수량을 반드시 다시 확인하세요.</p>
 </main>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <script>
 (() => {
   const $ = id => document.getElementById(id);
   let mode = "basic";
   let pendingState = null;
+  let pendingScan = null;
 
   const settings = JSON.parse(localStorage.getItem("simpleCalcSettingsV3") || "{}");
   const states = JSON.parse(localStorage.getItem("simpleCalcPositionV3") || '{"BTC":{"qty":0,"avg":0},"ETH":{"qty":0,"avg":0}}');
@@ -184,6 +207,104 @@
   function digits(){ return $("asset").value === "BTC" ? 6 : 5; }
   function state(){ return states[$("asset").value] || {qty:0,avg:0}; }
   function leaderState(){ return leaderStates[$("asset").value] || {qty:0,ratio:0,avg:0}; }
+
+  function cleanNumber(s){
+    if(s == null) return NaN;
+    const v=String(s).replace(/[Oo]/g,"0").replace(/[Il|]/g,"1").replace(/,/g,"").replace(/[^\d.\-]/g,"");
+    return Number(v);
+  }
+  function allNumbers(text){
+    return (text.match(/-?\d[\d,]*(?:\.\d+)?/g)||[]).map(cleanNumber).filter(Number.isFinite);
+  }
+  function parseLeaderCapture(text, asset){
+    const normalized=text.replace(/\r/g,"\n").replace(/[|]/g,"I");
+    const lines=normalized.split(/\n+/).map(x=>x.trim()).filter(Boolean);
+    let row="";
+    for(let i=0;i<lines.length;i++){
+      if(new RegExp("\\b"+asset+"\\b","i").test(lines[i])){
+        row=[lines[i],lines[i+1]||"",lines[i+2]||""].join(" ");
+        break;
+      }
+    }
+    if(!row){
+      const idx=normalized.toUpperCase().indexOf(asset);
+      if(idx>=0) row=normalized.slice(idx,idx+180);
+    }
+    const nums=allNumbers(row);
+    if(nums.length<3) return null;
+
+    let ratioIndex=nums.findIndex(n=>n>0 && n<100);
+    if(ratioIndex<1) ratioIndex=1;
+    const qty=nums[0];
+    const ratio=nums[ratioIndex];
+    const after=nums.slice(ratioIndex+1);
+    const avg=after.find(n=>n>100) ?? nums.find((n,i)=>i>ratioIndex && n>100);
+    if(!(qty>0 && ratio>0 && avg>0)) return null;
+    return {kind:"leader",qty,ratio,avg};
+  }
+  function parseMyCapture(text, asset){
+    const normalized=text.replace(/\r/g,"\n");
+    const lines=normalized.split(/\n+/).map(x=>x.trim()).filter(Boolean);
+    let qty=NaN, avg=NaN;
+
+    for(let i=0;i<lines.length;i++){
+      if(/size|position size|amount|qty|quantity/i.test(lines[i])){
+        const nums=allNumbers([lines[i],lines[i+1]||""].join(" "));
+        const candidate=nums.find(n=>n>0 && n<1000);
+        if(candidate) qty=candidate;
+      }
+      if(/entry price|avg(?:erage)? price|average|entry/i.test(lines[i])){
+        const nums=allNumbers([lines[i],lines[i+1]||""].join(" "));
+        const candidate=nums.find(n=>n>(asset==="BTC"?10000:100));
+        if(candidate) avg=candidate;
+      }
+    }
+
+    if(!(qty>0 && avg>0)){
+      const nums=allNumbers(normalized);
+      const priceThreshold=asset==="BTC"?10000:100;
+      const prices=nums.filter(n=>n>priceThreshold);
+      const qtys=nums.filter(n=>n>0 && n<(asset==="BTC"?10:1000));
+      if(!(qty>0)) qty=qtys[0];
+      if(!(avg>0)) avg=prices[0];
+    }
+    if(!(qty>0 && avg>0)) return null;
+    return {kind:"my",qty,avg};
+  }
+  async function runScan(file,kind){
+    const status=$("scanStatus"), preview=$("scanPreview"), confirmBtn=$("scanConfirm");
+    pendingScan=null;
+    confirmBtn.style.display="none";
+    preview.src=URL.createObjectURL(file);
+    preview.style.display="block";
+    status.className="scan-status busy";
+    status.textContent="캡처에서 숫자를 읽는 중입니다. 처음 한 번은 10~30초 걸릴 수 있어요.";
+    try{
+      if(!window.Tesseract) throw new Error("문자인식 기능을 불러오지 못했습니다. 인터넷 연결을 확인하세요.");
+      const result=await Tesseract.recognize(file,"eng",{
+        logger:m=>{
+          if(m.status==="recognizing text"){
+            status.textContent="숫자를 읽는 중… "+Math.round((m.progress||0)*100)+"%";
+          }
+        }
+      });
+      const text=result.data.text||"";
+      const parsed=kind==="leader" ? parseLeaderCapture(text,$("asset").value) : parseMyCapture(text,$("asset").value);
+      if(!parsed) throw new Error("숫자를 확실히 찾지 못했습니다. 필요한 부분이 크게 보이도록 캡처해서 다시 시도하세요.");
+      pendingScan=parsed;
+      status.className="scan-status";
+      if(kind==="leader"){
+        status.innerHTML=`읽은 기준값<br>수량 <b>${fmt(parsed.qty,digits())}</b> / 비율 <b>${fmt(parsed.ratio,4)}%</b> / 평균값 <b>${fmt(parsed.avg,8)}</b><br>맞으면 아래 버튼을 누르세요.`;
+      }else{
+        status.innerHTML=`읽은 내 포지션<br>수량 <b>${fmt(parsed.qty,digits())}</b> / 평균값 <b>${fmt(parsed.avg,8)}</b><br>맞으면 아래 버튼을 누르세요.`;
+      }
+      confirmBtn.style.display="block";
+    }catch(err){
+      status.className="scan-status error";
+      status.textContent=err.message||"캡처를 읽지 못했습니다.";
+    }
+  }
+
   function updateStateView(){
     const s=state();
     $("stateQty").textContent=fmt(s.qty,digits())+" "+$("asset").value;
@@ -243,13 +364,36 @@
 
   $("leaderSave").addEventListener("click",()=>{
     const q=num("leaderQty"), r=num("leaderRatio"), a=num("leaderAvg");
-    if(!(Number.isFinite(q)&&q>=0) || !(Number.isFinite(r)&&r>=0) || !(Number.isFinite(a)&&a>=0)) return alert("기준 수량·비율·평균값을 정확히 입력하세요.");
-    if((q===0 || r===0 || a===0) && !(q===0 && r===0 && a===0)) return alert("기준값은 세 항목을 모두 입력하거나 모두 0으로 입력하세요.");
+    if(!(Number.isFinite(q)&&q>=0) || !(Number.isFinite(r)&&r>=0) || !(Number.isFinite(a)&&a>=0)) return alert("리더 수량·비율·평균값을 정확히 입력하세요.");
+    if((q===0 || r===0 || a===0) && !(q===0 && r===0 && a===0)) return alert("리더값은 세 항목을 모두 입력하거나 모두 0으로 입력하세요.");
     leaderStates[$("asset").value]={qty:q,ratio:r,avg:a};
     localStorage.setItem("simpleCalcLeaderV32",JSON.stringify(leaderStates));
     updateStateView();
     $("leaderSave").textContent="저장됨";
-    setTimeout(()=>$("leaderSave").textContent="기준값 저장",1100);
+    setTimeout(()=>$("leaderSave").textContent="리더값 저장",1100);
+  });
+
+
+  $("leaderScanBtn").addEventListener("click",()=>$("leaderScanFile").click());
+  $("myScanBtn").addEventListener("click",()=>$("myScanFile").click());
+  $("leaderScanFile").addEventListener("change",e=>{const f=e.target.files&&e.target.files[0];if(f)runScan(f,"leader")});
+  $("myScanFile").addEventListener("change",e=>{const f=e.target.files&&e.target.files[0];if(f)runScan(f,"my")});
+  $("scanConfirm").addEventListener("click",()=>{
+    if(!pendingScan) return;
+    if(pendingScan.kind==="leader"){
+      $("leaderQty").value=pendingScan.qty;
+      $("leaderRatio").value=pendingScan.ratio;
+      $("leaderAvg").value=pendingScan.avg;
+      $("scanStatus").textContent="리더값 입력칸에 적용했습니다. 숫자를 확인한 뒤 ‘리더값 저장’을 눌러주세요.";
+    }else{
+      $("manualQty").value=pendingScan.qty;
+      $("manualAvg").value=pendingScan.avg;
+      $("scanStatus").textContent="내 현재값 입력칸에 적용했습니다. 숫자를 다시 보고 ‘현재값 저장’을 눌러주세요.";
+    }
+    const appliedKind=pendingScan.kind;
+    $("scanConfirm").style.display="none";
+    pendingScan=null;
+    window.scrollTo({top:appliedKind==="leader"?300:150,behavior:"smooth"});
   });
 
   updateStateView();
@@ -286,9 +430,9 @@
       const applied=ratio*mult, margin=balance*applied/100, position=margin*lev;
       result=position/price;
       next={qty:result,avg:price};
-      rows=[["적용 비율",fmt(applied,6)+"%"],["사용 금액",fmt(margin,2)+" USDT"],["전체 금액",fmt(position,2)+" USDT"],["계산 후 평균값",fmt(price,8)]];
+      rows=[["적용 비율",fmt(applied,6)+"%"],["필요 증거금",fmt(margin,2)+" USDT"],["포지션 규모",fmt(position,2)+" USDT"],["계산 후 평균값",fmt(price,8)]];
       if(ratio>=1) warnings.push("입력 비율이 1% 이상입니다.");
-      showResult("결과값",result,rows,warnings,next);
+      showResult("신규 주문수량",result,rows,warnings,next);
     }
 
     if(mode==="diff"){
@@ -300,10 +444,10 @@
       const newQty=current+result;
       const newAvg=newQty>0?((current*oldAvg)+(result*price))/newQty:0;
       next={qty:newQty,avg:newAvg};
-      rows=[["목표 전체수량",fmt(target,digits())+" "+asset],["현재 수량",fmt(current,digits())+" "+asset],["계산 후 수량",fmt(newQty,digits())+" "+asset],["사용 금액",fmt(result*price/lev,2)+" USDT"]];
+      rows=[["목표 전체수량",fmt(target,digits())+" "+asset],["현재 수량",fmt(current,digits())+" "+asset],["계산 후 수량",fmt(newQty,digits())+" "+asset],["필요 증거금",fmt(result*price/lev,2)+" USDT"]];
       if(target<=current) warnings.push("현재 수량이 목표수량 이상이라 추가값은 0입니다.");
       if(!oldAvg) warnings.push("저장 평균값과 현재 수량이 다르면 계산 후 평균값은 저장하지 않는 편이 안전합니다.");
-      showResult("이번 차이값",result,rows,warnings,next);
+      showResult("비중 추가수량",result,rows,warnings,next);
     }
 
     if(mode==="average"){
@@ -317,10 +461,10 @@
       next={qty:total,avg:avg};
       const afterRatio=total*avg/num("leverage")/num("balance")*100;
       const ls=leaderState(), targetRatio=ls.ratio*num("multiplier");
-      rows=[["계산 후 전체수량",fmt(total,digits())+" "+asset],["계산 후 평균값",fmt(avg,8)],["계산 후 내 비율",fmt(afterRatio,4)+"%"],["기준 목표비율",fmt(targetRatio,4)+"%"],["목표 초과",fmt(Math.max(0,afterRatio-targetRatio),4)+"%p"],["추가 사용금액",fmt(result*p/num("leverage"),2)+" USDT"]];
-      if(result>q) warnings.push("추가수량이 현재 수량보다 큽니다.");
-      if(result>q*2) warnings.push("추가수량이 현재 수량의 2배를 넘습니다.");
-      showResult("필요한 추가값",result,rows,warnings,next);
+      rows=[["계산 후 전체수량",fmt(total,digits())+" "+asset],["계산 후 평균값",fmt(avg,8)],["계산 후 내 비율",fmt(afterRatio,4)+"%"],["리더×내 배율 목표",fmt(targetRatio,4)+"%"],["목표보다 초과",fmt(Math.max(0,afterRatio-targetRatio),4)+"%p"],["추가 증거금",fmt(result*p/num("leverage"),2)+" USDT"]];
+      if(result>q) warnings.push("추가수량이 현재 수량보다 큽니다. 주문 전 반드시 다시 확인하세요.");
+      if(result>q*2) warnings.push("위험: 추가수량이 현재 수량의 2배를 넘습니다. 바로 주문하지 마세요.");
+      showResult("지금 추가할 수량",result,rows,warnings,next);
     }
 
     if(mode==="reduce"){
@@ -337,7 +481,7 @@
       if(currentRatio<=myTargetRatio) warnings.push("현재 비중이 목표비중 이하라 정리값은 0입니다.");
       if(actualPct>pct+5) warnings.push("리더보다 더 많이 덜어내는 계산입니다. 평단 맞추기로 늘어난 비중을 정상화하는 값입니다.");
       if(actualPct>=80) warnings.push("실제 정리 비율이 80% 이상입니다. 입력값을 다시 확인하세요.");
-      showResult("이번 정리값",result,rows,warnings,next);
+      showResult("지금 덜어낼 수량",result,rows,warnings,next);
     }
     saveSettings();
   });
